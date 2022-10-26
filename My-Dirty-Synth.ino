@@ -41,6 +41,9 @@ MIDI_CREATE_INSTANCE(HardwareSerial, SerialMidi, myMidi);
 #define OSCILLATORS_FACTOR 1
 
 float mainFreq;
+float mainFreqUp;
+float mainFreqDown;
+float midiFreq = -1;
 float mainFreqOLD = -1;
 float octave1Factor;
 float octave1FactorOLD = -1;
@@ -56,6 +59,8 @@ float filterDrive;
 float filterDriveOLD = -1;
 float filterFreq;
 float filterFreqOLD = -1;
+float filterMidiFreq = -1;
+float filterMidiFreqOLD = -1;
 float dyncAttack;
 float dyncAttackOLD = -1;
 float dyncDecay;
@@ -118,6 +123,8 @@ void setup() {
 
   myMidi.setHandleNoteOn(handleNoteOn);
   myMidi.setHandleNoteOff(handleNoteOff);
+  myMidi.setHandlePitchBend(handlePitchBend);
+  myMidi.setHandleControlChange(handleControlChange);
   myMidi.begin(MIDI_CHANNEL_OMNI);
 
   //Setupt input outputs
@@ -140,7 +147,7 @@ void setup() {
   wavefolder.SetOffset(0);
 
   sample_rate = DAISY.get_samplerate();
-  
+
   bitcrusher.Init();
   bitcrusher.SetDownsampleFactor(0.4f);
   funkyFilter.Init(sample_rate);
@@ -297,7 +304,8 @@ void loop() {
 
   myMidi.read();
   // put your main code here, to run repeatedly:
-  mainFreq = semitone_to_hertz(simpleAnalogReadAndMap(AN_MAIN_FREQ, -57, 70));
+  int freqNote = simpleAnalogReadAndMap(AN_MAIN_FREQ, -57, 70);
+  mainFreq = semitone_to_hertz(freqNote);
   octave1Factor = simpleAnalogRead(AN_OCTAVE_1);
   octave2Factor = simpleAnalogRead(AN_OCTAVE_2);
   wavefolderFactor = simpleAnalogRead(AN_WAVEFOLD);
@@ -366,8 +374,15 @@ void loop() {
 #endif
   if (mainFreq != mainFreqOLD)
   {
-    Serial.println(mainFreq);
-    setGlobalFrequency(mainFreq);
+
+    if (mainFreq < 10 && midiFreq != -1) //if frequency is at its lowest and midi fequency has been changed, don't update frequency*
+    { 
+      //do nothing
+    } 
+    else
+    {
+      setGlobalFrequency(mainFreq);
+    }
   }
   if (octave1Factor != octave1FactorOLD)
   {
@@ -403,9 +418,32 @@ void loop() {
   }
   if (filterFreq != filterFreqOLD)
   {
-    float cutoffFreq = (filterFreq) * (sample_rate / 4);
+    Serial.println("a");
+    if(filterMidiFreq == -1)
+    {
+      // if midi mod freq never changed 
+      float cutoffFreq = (filterFreq) * (sample_rate / 4);
+      funkyFilter.SetFreq(cutoffFreq);    
+    }
+    else
+    {
+      // if midi mod freq never changed, need bigger change of filterFreq to update
+      Serial.println(abs(filterFreq-filterFreqOLD));
+      if(abs(filterFreq-filterFreqOLD) > 0.008)
+      {
+        filterMidiFreq = -1;
+        float cutoffFreq = (filterFreq) * (sample_rate / 4);
+        funkyFilter.SetFreq(cutoffFreq);
+      }
+    }
+  }
+
+  if (filterMidiFreq != filterMidiFreqOLD)
+  {
+    float cutoffFreq = (filterMidiFreq) * (sample_rate / 4);
     funkyFilter.SetFreq(cutoffFreq);
   }
+  
   if (dyncAttack != dyncAttackOLD)
   {
     adsr.SetAttackTime(dyncAttack);
@@ -477,6 +515,7 @@ void loop() {
   filterResOLD = filterRes;
   filterDriveOLD = filterDrive;
   filterFreqOLD = filterFreq;
+  filterMidiFreqOLD = filterMidiFreq;
   dyncAttackOLD = dyncAttack;
   dyncDecayOLD = dyncDecay;
   dyncReleaseOLD = dyncRelease;
@@ -495,17 +534,52 @@ void loop() {
 
 }
 
-void handleNoteOn(byte inChannel, byte inNote, byte inVelocity) {    
-    float midiFreq = semitone_to_hertz(inNote-57);
-    setGlobalFrequency(midiFreq);
-    gate = true;
-    digitalWrite(DI_O_PULSE,HIGH);
+void handleNoteOn(byte inChannel, byte inNote, byte inVelocity) {
+  midiFreq = semitone_to_hertz(inNote - 57);
+
+  mainFreqUp = semitone_to_hertz(inNote - 57 + 1);
+  mainFreqDown = semitone_to_hertz(inNote - 57 - 1);
+
+  setGlobalFrequency(midiFreq);
+  gate = true;
+  digitalWrite(DI_O_PULSE, HIGH);
 }
 
 void handleNoteOff(byte inChannel, byte inNote, byte inVelocity)
 {
-    gate = false;
-    digitalWrite(DI_O_PULSE,LOW);
+  gate = false;
+  digitalWrite(DI_O_PULSE, LOW);
+}
+
+void handlePitchBend(unsigned char inChannel, int data)
+{
+  //data goest from -8192 to +8192
+  if (data == 0)
+  {
+    setGlobalFrequency(midiFreq);
+  }
+  else if (data > 0)
+  {
+    float bendedFreq = (((mainFreqUp - midiFreq) / 8192.0f) * data);
+    setGlobalFrequency(midiFreq + bendedFreq);
+  }
+  else if (data < 0)
+  {
+    float bendedFreq = (((midiFreq - mainFreqDown) / 8192.0f) * -data);
+    setGlobalFrequency(midiFreq - bendedFreq);
+
+  }
+
+}
+
+void handleControlChange(unsigned char inChannel, unsigned char data1, unsigned char data2)
+{
+  if (data1 == 1)
+  {
+    //data2 goes from 0 to 127
+    filterMidiFreq = data2/127.0f;
+    Serial.println(filterMidiFreq);
+  }
 }
 
 float semitone_to_hertz(int8_t note_number) {
