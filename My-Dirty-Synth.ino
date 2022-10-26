@@ -2,8 +2,14 @@
 ///////////////////// VARIABLES & LIBRARIES ////////////////////
 
 #include "DaisyDuino.h"
+#include <MIDI.h>
 
 using namespace daisysp;
+
+HardwareSerial SerialMidi(1, 2);
+MIDI_CREATE_INSTANCE(HardwareSerial, SerialMidi, myMidi);
+
+
 
 ////////////////////////////////////////////////////////////////
 ///////////////////// INPUT OUTPUT DEFINITION///////////////////
@@ -16,9 +22,9 @@ using namespace daisysp;
 #define AN_F_RES A6
 #define AN_F_DRIVE A5
 #define AN_F_FREQ A4
-#define AN_DYNC_SUS A3
-#define AN_DYNC_DEC A2
-#define AN_DYNC_DEC_MODE A1
+#define AN_DYNC_ATT A3
+#define AN_DYNC_REL A2
+#define AN_DYNC_DEC A1
 #define AN_MAIN_VOLUME A0
 
 #define DI_I_OSC_TYPE_0 6
@@ -50,12 +56,12 @@ float filterDrive;
 float filterDriveOLD = -1;
 float filterFreq;
 float filterFreqOLD = -1;
-float dyncSustain;
-float dyncSustainOLD = -1;
+float dyncAttack;
+float dyncAttackOLD = -1;
 float dyncDecay;
 float dyncDecayOLD = -1;
-float dyncDecayMode;
-float dyncDecayModeOLD = -1;
+float dyncRelease;
+float dyncReleaseOLD = -1;
 float mainVolume;
 float mainVolumeOLD = -1;
 
@@ -109,8 +115,10 @@ float filterFrequency;
 
 void setup() {
   Serial.begin(15200);
-  Serial.println("Begin, will sleep for 2 secs to let time to open debug console");
-  delay(2000);
+
+  myMidi.setHandleNoteOn(handleNoteOn);
+  myMidi.setHandleNoteOff(handleNoteOff);
+  myMidi.begin(MIDI_CHANNEL_OMNI);
 
   //Setupt input outputs
   pinMode(DI_I_OSC_TYPE_0, INPUT_PULLUP);
@@ -131,12 +139,8 @@ void setup() {
   wavefolder.SetGain(1);
   wavefolder.SetOffset(0);
 
-
-
   sample_rate = DAISY.get_samplerate();
-  Serial.print("Sample Rate: ");
-
-  Serial.println(sample_rate);
+  
   bitcrusher.Init();
   bitcrusher.SetDownsampleFactor(0.4f);
   funkyFilter.Init(sample_rate);
@@ -245,7 +249,7 @@ void ProcessAudio(float **in, float **out, size_t size) {
         //simple adsr
         case 1:
           adsrGain = adsr.Process(gate);
-          afterAdsr = withFilter*adsrGain;
+          afterAdsr = withFilter * adsrGain;
           break;
         //simple low pass gate
         case 3:
@@ -259,7 +263,7 @@ void ProcessAudio(float **in, float **out, size_t size) {
           adsrGain = adsr.Process(gate);
           lowPassGate.SetFreq(adsrGain * (sample_rate / 2));
           lowPassGate.Process(withFilter);
-          afterAdsr = lowPassGate.Low()*((adsrGain*3/4)+0.25);
+          afterAdsr = lowPassGate.Low() * ((adsrGain * 3 / 4) + 0.25);
           break;
       }
 
@@ -290,19 +294,8 @@ void setGlobalFrequency(float localFrequency)
 
 void loop() {
 
-  titi = (titi + 1) % 1024;
 
-  if (titi == 0)
-  {
-    Serial.println("Gate on");
-    gate = true;
-  }
-  else if (titi == 512)
-  {
-    Serial.println("Gate off");
-    gate = false;
-  }
-
+  myMidi.read();
   // put your main code here, to run repeatedly:
   mainFreq = semitone_to_hertz(simpleAnalogReadAndMap(AN_MAIN_FREQ, -57, 70));
   octave1Factor = simpleAnalogRead(AN_OCTAVE_1);
@@ -312,9 +305,9 @@ void loop() {
   filterRes = simpleAnalogRead(AN_F_RES);
   filterDrive = simpleAnalogRead(AN_F_DRIVE);
   filterFreq = simpleAnalogRead(AN_F_FREQ);
-  dyncSustain = simpleAnalogRead(AN_DYNC_SUS);
+  dyncAttack = simpleAnalogRead(AN_DYNC_ATT);
   dyncDecay = simpleAnalogRead(AN_DYNC_DEC);
-  dyncDecayMode = simpleAnalogRead(AN_DYNC_DEC_MODE);
+  dyncRelease = simpleAnalogRead(AN_DYNC_REL);
   mainVolume = simpleAnalogRead(AN_MAIN_VOLUME);
 
   oscType0 = digitalRead(DI_I_OSC_TYPE_0);
@@ -362,17 +355,18 @@ void loop() {
   Serial.print(filterDrive);
   Serial.print(" ,filterFreq ");
   Serial.print(filterFreq);
-  Serial.print(" ,dyncSustain ");
-  Serial.print(dyncSustain);
+  Serial.print(" ,dyncAttack ");
+  Serial.print(dyncAttack);
   Serial.print(" ,dyncDecay ");
   Serial.print(dyncDecay);
-  Serial.print(" ,dyncDecayMode ");
-  Serial.print(dyncDecayMode);
+  Serial.print(" ,dyncRelease ");
+  Serial.print(dyncRelease);
   Serial.print(" ,AN_MAIN_VOLUME ");
   Serial.println(mainVolume);
 #endif
   if (mainFreq != mainFreqOLD)
   {
+    Serial.println(mainFreq);
     setGlobalFrequency(mainFreq);
   }
   if (octave1Factor != octave1FactorOLD)
@@ -390,9 +384,10 @@ void loop() {
   }
   if (bitcrushFactor != bitcrushFactorOLD)
   {
-    int convertedBitFactor = bitcrushFactor * 2.5;
-    convertedBitFactor = 16 - convertedBitFactor;
-    bitcrusher.SetBitsToCrush(convertedBitFactor);
+    int convertedBitFactor = bitcrushFactor * 7.5 + 8;
+    convertedBitFactor = convertedBitFactor;
+
+    bitcrusher.SetBitsToCrush(convertedBitFactor);//convertedBitFactor);
     bitcrusher.SetDownsampleFactor(bitcrushFactor);
 
     //bitcrusher.SetDownsampleFactor((sample_rate) * (1.1 - bitcrushFactor));
@@ -411,17 +406,17 @@ void loop() {
     float cutoffFreq = (filterFreq) * (sample_rate / 4);
     funkyFilter.SetFreq(cutoffFreq);
   }
-  if (dyncSustain != dyncSustainOLD)
+  if (dyncAttack != dyncAttackOLD)
   {
-    adsr.SetAttackTime(dyncSustain);
+    adsr.SetAttackTime(dyncAttack);
   }
   if (dyncDecay != dyncDecayOLD)
   {
     adsr.SetDecayTime(dyncDecay);
   }
-  if (dyncDecayMode != dyncDecayModeOLD)
+  if (dyncRelease != dyncReleaseOLD)
   {
-    adsr.SetReleaseTime(dyncDecayMode);
+    adsr.SetReleaseTime(dyncRelease);
   }
   if (mainVolume != mainVolumeOLD)
   {
@@ -482,9 +477,9 @@ void loop() {
   filterResOLD = filterRes;
   filterDriveOLD = filterDrive;
   filterFreqOLD = filterFreq;
-  dyncSustainOLD = dyncSustain;
+  dyncAttackOLD = dyncAttack;
   dyncDecayOLD = dyncDecay;
-  dyncDecayModeOLD = dyncDecayMode;
+  dyncReleaseOLD = dyncRelease;
   mainVolumeOLD = mainVolume;
   oscType0OLD = oscType0;
   oscType1OLD = oscType1;
@@ -498,6 +493,19 @@ void loop() {
 
 
 
+}
+
+void handleNoteOn(byte inChannel, byte inNote, byte inVelocity) {    
+    float midiFreq = semitone_to_hertz(inNote-57);
+    setGlobalFrequency(midiFreq);
+    gate = true;
+    digitalWrite(DI_O_PULSE,HIGH);
+}
+
+void handleNoteOff(byte inChannel, byte inNote, byte inVelocity)
+{
+    gate = false;
+    digitalWrite(DI_O_PULSE,LOW);
 }
 
 float semitone_to_hertz(int8_t note_number) {
