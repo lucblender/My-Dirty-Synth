@@ -70,6 +70,11 @@ float dyncReleaseOLD = -1;
 float mainVolume;
 float mainVolumeOLD = -1;
 
+float effectFactorWaveFolderSetpoint = 1.0f;
+float effectFactorBitCrusher = 1.0f;
+float effectFactorWaveFolder = 1.0f;
+float effectFactorBitCrusherSetpoint = 1.0f;
+
 uint8_t oscType0;
 uint8_t oscType0OLD = 10;
 uint8_t oscType1;
@@ -172,6 +177,8 @@ void setup() {
   oscOctaveTwo.SetWaveform(osc.WAVE_SIN);
 
   adsr.Init(sample_rate);
+  
+  adsr.SetSustainLevel(.3);
 
 
   // DAISY SETUP
@@ -212,18 +219,13 @@ void ProcessAudio(float **in, float **out, size_t size) {
         break;
       //wavefolder then bitcrusher
       case 3:
-        if (bitcrushFactor > 0.1)
+      case 2:
+        if (bitcrushFactor > 0.02)
           withEffects = bitcrusher.Process(((wavefolderFactor < 0.01) ? addedOscillators : wavefolder.Process(addedOscillators)));
         else
           withEffects = ((wavefolderFactor < 0.01) ? addedOscillators : wavefolder.Process(addedOscillators));
         break;
-      //bitcrusher then wavefolder
-      case 2:
-        if (bitcrushFactor > 0.1)
-          withEffects = (wavefolderFactor < 0.01) ? bitcrusher.Process(addedOscillators) : wavefolder.Process(bitcrusher.Process(addedOscillators));
-        else
-          withEffects = (wavefolderFactor < 0.01) ? addedOscillators : wavefolder.Process(addedOscillators);
-        break;
+      
     }
 
 
@@ -234,11 +236,11 @@ void ProcessAudio(float **in, float **out, size_t size) {
         break;
       case 1:
         funkyFilter.Process(withEffects);
-        withFilter = funkyFilter.Low();
+        withFilter = funkyFilter.High();
         break;
       case 2:
         funkyFilter.Process(withEffects);
-        withFilter = funkyFilter.High();
+        withFilter = funkyFilter.Low();
         break;
       case 3:
         funkyFilter.Process(withEffects);
@@ -389,7 +391,7 @@ void loop() {
     }
     mainFreqOLD = mainFreq;
   }
-  if (abs(octave1Factor != octave1FactorOLD) > TRIGGER_DIFF)
+  if (abs(octave1Factor - octave1FactorOLD) > TRIGGER_DIFF)
   {
     oscOctaveOne.SetAmp(octave1Factor * OSCILLATORS_FACTOR);
 
@@ -401,20 +403,21 @@ void loop() {
 
     octave2FactorOLD = octave2Factor;
   }
-  if (abs(wavefolderFactor - wavefolderFactorOLD) > TRIGGER_DIFF)
+  if ((abs(wavefolderFactor - wavefolderFactorOLD) > TRIGGER_DIFF) || (effectFactorWaveFolderSetpoint != effectFactorWaveFolder))
   {
-    wavefolder.SetGain(5.0 * wavefolderFactor + 1.0);
-    wavefolder.SetOffset(1.3 * wavefolderFactor);
+    wavefolder.SetGain(5.0 * (wavefolderFactor * effectFactorWaveFolder) + 1.0);
+    wavefolder.SetOffset(1.3 * (wavefolderFactor * effectFactorWaveFolder));
 
     wavefolderFactorOLD = wavefolderFactor;
   }
-  if (abs(bitcrushFactor != bitcrushFactorOLD) > TRIGGER_DIFF)
+  if ((abs(bitcrushFactor - bitcrushFactorOLD) > TRIGGER_DIFF) || (effectFactorBitCrusher != effectFactorBitCrusherSetpoint))
   {
-    int convertedBitFactor = bitcrushFactor * 7.5 + 8;
+    int convertedBitFactor = (bitcrushFactor) * 9.5 + 0;
     convertedBitFactor = convertedBitFactor;
 
     bitcrusher.SetBitsToCrush(convertedBitFactor);//convertedBitFactor);
-    bitcrusher.SetDownsampleFactor(bitcrushFactor);
+    float downsampleFactor = (bitcrushFactor * effectFactorBitCrusher);//+ 0.5f;
+    bitcrusher.SetDownsampleFactor(downsampleFactor);
 
     //bitcrusher.SetDownsampleFactor((sample_rate) * (1.1 - bitcrushFactor));
     bitcrushFactorOLD = bitcrushFactor;
@@ -426,9 +429,10 @@ void loop() {
 
     filterResOLD = filterRes;
   }
-  if (abs(filterDrive != filterDriveOLD) > TRIGGER_DIFF)
+  if (abs(filterDrive - filterDriveOLD) > TRIGGER_DIFF)
   {
-    funkyFilter.SetDrive(0.3 + (filterDrive * 1.7));
+    float drive = filterDrive * 0.7;
+    funkyFilter.SetDrive(drive);
 
     filterDriveOLD = filterDrive;
   }
@@ -524,6 +528,22 @@ void loop() {
     crushFoldType = crushFold0 + crushFold1 * 2;
     crushFold0OLD = crushFold0;
     crushFold1OLD = crushFold1;
+
+    switch (crushFoldType)
+    {
+      case 1://Fold only
+        effectFactorWaveFolderSetpoint = 1.0f;
+        break;
+      case 3://F up D down
+        effectFactorWaveFolderSetpoint = 1.0f;
+        effectFactorBitCrusherSetpoint = 0.5f;
+        break;
+      case 2://F down D up
+        effectFactorWaveFolderSetpoint = 0.2f;
+        effectFactorBitCrusherSetpoint = 1.0f;
+        break;
+    }
+
   }
   if (filterType0 != filterType0OLD || filterType1 != filterType1OLD)
   {
@@ -543,6 +563,38 @@ void loop() {
 
     gateType0OLD = gateType0;
     gateType1OLD = gateType1;
+  }
+
+  if (effectFactorWaveFolderSetpoint != effectFactorWaveFolder)
+  {
+    if (effectFactorWaveFolderSetpoint > effectFactorWaveFolder)
+    {
+      effectFactorWaveFolder += 0.001;
+    }
+    else
+    {
+      effectFactorWaveFolder -= 0.001;
+    }
+    if(abs(effectFactorWaveFolderSetpoint - effectFactorWaveFolder)<0.001)
+    {
+        effectFactorWaveFolder = effectFactorWaveFolderSetpoint;
+    }
+  }
+  
+  if (effectFactorBitCrusher != effectFactorBitCrusherSetpoint)
+  {
+    if (effectFactorBitCrusherSetpoint > effectFactorBitCrusher)
+    {
+      effectFactorBitCrusher += 0.001;
+    }
+    else
+    {
+      effectFactorBitCrusher -= 0.001;
+    }
+    if(abs(effectFactorBitCrusherSetpoint - effectFactorBitCrusher)<0.001)
+    {
+        effectFactorBitCrusher = effectFactorBitCrusherSetpoint;
+    }
   }
 }
 
