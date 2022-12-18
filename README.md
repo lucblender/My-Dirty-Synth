@@ -89,4 +89,4 @@ The control change affects the filter cutoff frequency.
 
 ## Wiring
 
-![My-Dirty-Synth wiring](My-Dirty-Synth-Wiring.jpeg)
+![My-Dirty-Synth wiring](pictures/My-Dirty-Synth-Wiring.jpeg)
