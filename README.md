@@ -15,8 +15,8 @@ Each component of the synth (potentiometer, switch, jack) comes from the Simple 
 I'm using the daisysp wavefolder, it is not yet in the daisyduino library (tested the 19.04.2024 with daisyduino 1.6.3).
 
 You need to get them in the daisysp library:
-- (wavefolder.h)[https://github.com/electro-smith/DaisySP/blob/master/Source/Effects/wavefolder.cph]
-- (wavefolder.cpp)[https://github.com/electro-smith/DaisySP/blob/master/Source/Effects/wavefolder.cpp] 
+- [wavefolder.h](https://github.com/electro-smith/DaisySP/blob/master/Source/Effects/wavefolder.h)
+- [wavefolder.cpp](https://github.com/electro-smith/DaisySP/blob/master/Source/Effects/wavefolder.cpp) 
 
 You can put those two files in your daisyduino library path usually ```C:\Users\YourUserName\Documents\Arduino\libraries\DaisyDuino\src\utility\DaisySP\modules``` on Windows.
 
