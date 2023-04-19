@@ -7,7 +7,24 @@ Content:
 # Infos
 This git contains all the files to realize your own "My-Dirty-Synth" made with the [Simple Synth kit](https://www.synthux.academy/simple) made by synthux academy. The synth is based on a [Daisy seed](https://www.electro-smith.com/daisy/daisy) by electro-smith and uses their Arduino library [DaisyDuino](https://github.com/electro-smith/DaisyDuino).
 
+
 Each component of the synth (potentiometer, switch, jack) comes from the Simple Synth kit except what is linked to MIDI. For this, a custom PCB acting like a front panel has been made.
+
+## Daisyduino warning
+
+I'm using the daisysp wavefolder, it is not yet in the daisyduino library (tested the 19.04.2024 with daisyduino 1.6.3).
+
+You need to get them in the daisysp library:
+- (wavefolder.h)[https://github.com/electro-smith/DaisySP/blob/master/Source/Effects/wavefolder.cph]
+- (wavefolder.cpp)[https://github.com/electro-smith/DaisySP/blob/master/Source/Effects/wavefolder.cpp] 
+
+You can put those two files in your daisyduino library path usually ```C:\Users\YourUserName\Documents\Arduino\libraries\DaisyDuino\src\utility\DaisySP\modules``` on Windows.
+
+Then you'll need to do two modifications:
+
+- on the _wavefolder.h_ file, replace line 6 ```
+#include "Utility/dcblock.h"``` by ```#include "dcblock.h"```
+- on the  _daisysp.h_ usually located ```C:\Users\YourUserName\Documents\Arduino\libraries\DaisyDuino\src\utility\DaisySP\daisysp.h``` you need to add ```#include "modules/wavefolder.h"``` on line 18. 
 
 # Architecture
 

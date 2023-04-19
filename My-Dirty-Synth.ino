@@ -113,7 +113,7 @@ static Oscillator oscOctaveTwo;
 Wavefolder wavefolder;
 Decimator bitcrusher;
 Svf funkyFilter;
-Svf lowPassGate;
+MoogLadder lowPassGate;
 Adsr adsr;
 float frequency = 440;
 float sample_rate;
@@ -158,10 +158,9 @@ void setup() {
   bitcrusher.Init();
   bitcrusher.SetDownsampleFactor(0.4f);
   funkyFilter.Init(sample_rate);
-  lowPassGate.Init(sample_rate);
 
-  lowPassGate.SetRes(0.9);
-  lowPassGate.SetDrive(0.9);
+  lowPassGate.Init(sample_rate);
+  lowPassGate.SetFreq(sample_rate);
 
   // OSCILLATOR SETUP
   osc.Init(sample_rate);
@@ -265,16 +264,16 @@ void ProcessAudio(float **in, float **out, size_t size) {
           break;
         //simple low pass gate
         case 3:
-          adsrGain = adsr.Process(gate);
-          lowPassGate.Process(withFilter);
-          afterAdsr = lowPassGate.Low();
+          adsrGain = adsr.Process(gate);    
+          lowPassGate.SetFreq((sample_rate / 2) * (adsrGain * adsrGain));      
+          afterAdsr = lowPassGate.Process(withFilter);
           break;
         //adsr + low pass gate
         case 2:
           adsrGain = adsr.Process(gate);
-          lowPassGate.SetFreq(adsrGain * (sample_rate / 2));
-          lowPassGate.Process(withFilter);
-          afterAdsr = lowPassGate.Low() * ((adsrGain * 3 / 4) + 0.25);
+          lowPassGate.SetFreq((sample_rate / 2) * (adsrGain * adsrGain));
+          float lpgOutput = lowPassGate.Process(withFilter);
+          afterAdsr = lpgOutput * ((adsrGain * 3 / 4) + 0.25);
           break;
       }
 
@@ -288,8 +287,6 @@ void ProcessAudio(float **in, float **out, size_t size) {
     out[0][i] = finalOutput;//Filter.High();
     out[1][i] = finalOutput;//funkyFilter.High();
   }
-
-  lowPassGate.SetFreq(adsrGain * (sample_rate));
 }
 
 
@@ -599,6 +596,7 @@ void loop() {
 }
 
 void handleNoteOn(byte inChannel, byte inNote, byte inVelocity) {
+  Serial.println("handleNoteOn");
   midiFreq = semitone_to_hertz(inNote - 57);
 
   mainFreqUp = semitone_to_hertz(inNote - 57 + 1);
@@ -611,6 +609,7 @@ void handleNoteOn(byte inChannel, byte inNote, byte inVelocity) {
 
 void handleNoteOff(byte inChannel, byte inNote, byte inVelocity)
 {
+  Serial.println("handleNoteOff");
   gate = false;
   digitalWrite(DI_O_PULSE, LOW);
 }
