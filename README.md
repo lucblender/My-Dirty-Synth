@@ -69,34 +69,33 @@ The control change affects the filter cutoff frequency.
 
 
 ## Gpios
-
-| Bloc       | Description           | Components       | Gpios |
-|------------|-----------------------|------------------|-------|
-| Oscillator | Main frequency        | Pot              | A11   |
-| Oscillator | Octave 1              | Pot              | A10   |
-| Oscillator | Octave 2              | Pot              | A9    |
-| Effects    | Wavefolder factor     | Pot              | A8    |
-| Effects    | Decimator factor      | Pot              | A7    |
-| Filter     | Res frequency         | Pot              | A6    |
-| Filter     | Filter drive          | Pot              | A5    |
-| Filter     | Filter cutoff freq    | Pot              | A4    |
-| VCA/LPG    | Attack                | Pot              | A3    |
-| VCA/LPG    | Release               | Pot              | A2    |
-| VCA/LPG    | Decay                 | Pot              | A1    |
-| General    | Main volume           | Pot              | A0    |
-| Oscillator | Oscillator type       | Switch 2 pos     | 6     |
-| Oscillator | Oscillator type       | Switch 2 pos     | 7     |
-| Effects    | Effect mode selection | Switch 3 pos 1.1 | 8     |
-| Effects    | Effect mode selection | Switch 3 pow 1.2 | 9     |
-| Filter     | Filter type           | Switch 2 pos     | 10    |
-| Filter     | Filter type           | Switch 2 pos     | 11    |
-| VCA/LPG    | VCA Mode              | Switch 2 pos     | 12    |
-| General    | Gate out signal       | Jack             | 5     |
-| VCA/LPG    | VCA LPG selection     | Switch 3 pos 2.1 | 4     |
-| VCA/LPG    | VCA LPG selection     | Switch 3 pos 2.2 | 3     |
-| MIDI       | MIDI input            | MIDI connector   | 1     |
-| Output     | AudioOut[0]			 | Mono Jack        | AudioOut1    |
-| Output     | AudioOut[1]	 	     | -  			    | AudioOut2    |
+|    Bloc    |       Description       |     Components     |   Gpios   | Daisy pin | Simple Patch | Simple Pin |   Notes  |
+|:----------:|:-----------------------:|:------------------:|:---------:|:---------:|:------------:|:----------:|:--------:|
+| Oscillator | Main frequency          | Pot                |    A11    |     35    |       6      |     43     |          |
+| Oscillator | Octave   1              | Pot                |    A10    |     32    |       8      |     40     |          |
+| Oscillator | Octave   2              | Pot                |     A9    |     31    |      13      |     39     |          |
+| Effects    | Wavefolder   factor     | Pot                |     A8    |     30    |      22      |     38     |          |
+| Effects    | Decimator   factor      | Pot                |     A7    |     29    |      33      |     37     |          |
+| Filter     | Res   frequency         | Pot                |     A6    |     28    |      42      |     36     |          |
+| Filter     | Filter   drive          | Pot                |     A5    |     27    |      44      |     35     |          |
+| Filter     | Filter   cutoff freq    | Pot                |     A4    |     26    |      53      |     34     |          |
+| VCA/LPG    | Attack                  | Pot                |     A3    |     25    |      67      |     33     |          |
+| VCA/LPG    | Release                 | Pot                |     A2    |     24    |      69      |     32     |          |
+| VCA/LPG    | Decay                   | Pot                |     A1    |     23    |      73      |     31     |          |
+| General    | Main   volume           | Pot                |     A0    |     22    |      71      |     30     |          |
+| Oscillator | Oscillator   type       | Switch   2 pos     |     6     |     7     |       5      |      7     |          |
+| Oscillator | Oscillator   type       | Switch   2 pos     |     7     |     8     |      10      |      8     |          |
+| Effects    | Effect   mode selection | Switch   3 pos 1.1 |     8     |     9     |      28      |      9     |          |
+| Effects    | Effect   mode selection | Switch   3 pow 1.2 |     9     |     10    |      29      |     10     |          |
+| Filter     | Filter   type           | Switch   2 pos     |     10    |     11    |      50      |     11     |          |
+| Filter     | Filter   type           | Switch   2 pos     |     11    |     12    |      55      |     12     |          |
+| VCA/LPG    | VCA   Mode              | Switch   2 pos     |     12    |     13    |      61      |     13     |          |
+| General    | Gate   out signal       | Jack               |     5     |     6     |      66      |      6     |          |
+| VCA/LPG    | VCA   LPG selection     | Switch   3 pos 2.1 |     4     |     5     |      78      |      5     |          |
+| VCA/LPG    | VCA   LPG selection     | Switch   3 pos 2.2 |     3     |     4     |      79      |      4     |          |
+| MIDI       | MIDI   input            | MIDI   connector   |     1     |     2     |              |            | UART     |
+| Output     | AudioOut[0]             | Mono   Jack        | AudioOut1 |     18    |      76      |     18     |          |
+| Output     | AudioOut[1]             | Mono   Jack        | AudioOut2 |     19    |              |            | Not used |
 
 
 # Pictures
@@ -107,3 +106,7 @@ The control change affects the filter cutoff frequency.
 ## Wiring
 
 ![My-Dirty-Synth wiring](pictures/My-Dirty-Synth-Wiring.jpeg)
+
+# Contribution
+
+Thanks the synthux academy community for their support and to lemkipper for contributing and putting the documentation to the test while building My-Dirty-Synth.
