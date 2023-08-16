@@ -37,6 +37,7 @@ MIDI_CREATE_INSTANCE(HardwareSerial, SerialMidi, myMidi);
 #define DI_O_PULSE 5
 #define DI_I_GATE_TYPE_0 4
 #define DI_I_GATE_TYPE_1 3
+#define DI_I_MIDI_CHANNEL_UPDATE 13
 
 #define OSCILLATORS_FACTOR 1
 
@@ -101,6 +102,8 @@ bool gate = false;
 
 int titi = 0;
 
+uint8_t listeningMidiChannel = 1;
+
 #define TRIGGER_DIFF 0.01
 
 ////////////////////////////////////////////////////////////////
@@ -124,6 +127,16 @@ float filterFrequency;
 ////////////////////////////////////////////////////////////////
 ///////////////////// START SYNTH SETUP ////////////////////////
 
+void midiBtnReleased() {
+  if (digitalRead(DI_I_MIDI_CHANNEL_UPDATE) == 1) {
+
+    uint8_t midi_channel_0 = digitalRead(DI_I_FILTER_TYPE_1);
+    uint8_t midi_channel_1 = digitalRead(DI_I_FILTER_TYPE_0) << 1;
+    uint8_t midi_channel_2 = digitalRead(DI_I_OSC_TYPE_1) << 2;
+    uint8_t midi_channel_3 = digitalRead(DI_I_OSC_TYPE_0) << 3;
+    listeningMidiChannel = midi_channel_3 + midi_channel_2 + midi_channel_1 + midi_channel_0 + 1;
+  }
+}
 
 void setup() {
   Serial.begin(15200);
@@ -145,6 +158,8 @@ void setup() {
   pinMode(DI_O_PULSE, OUTPUT);
   pinMode(DI_I_GATE_TYPE_0, INPUT_PULLUP);
   pinMode(DI_I_GATE_TYPE_1, INPUT_PULLUP);
+  pinMode(DI_I_MIDI_CHANNEL_UPDATE, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(DI_I_MIDI_CHANNEL_UPDATE), midiBtnReleased, RISING);
 
   // DAISY SETUP
   DAISY.init(DAISY_SEED, AUDIO_SR_48K);
@@ -176,7 +191,7 @@ void setup() {
   oscOctaveTwo.SetWaveform(osc.WAVE_SIN);
 
   adsr.Init(sample_rate);
-  
+
   adsr.SetSustainLevel(.3);
 
 
@@ -201,8 +216,8 @@ void ProcessAudio(float **in, float **out, size_t size) {
     float sample = osc.Process();
 
     //if octave factor == 0, don't even compute the oscillator
-    float sampleOctaveOne = (octave1Factor  < 0.01) ? 0 : oscOctaveOne.Process();
-    float sampleOctaveTwo = (octave2Factor  < 0.01) ? 0 : oscOctaveTwo.Process();
+    float sampleOctaveOne = (octave1Factor < 0.01) ? 0 : oscOctaveOne.Process();
+    float sampleOctaveTwo = (octave2Factor < 0.01) ? 0 : oscOctaveTwo.Process();
 
     float addedOscillators = sample + sampleOctaveOne + sampleOctaveTwo;
 
@@ -210,26 +225,13 @@ void ProcessAudio(float **in, float **out, size_t size) {
 
     float withFilter;
 
-    switch (crushFoldType)
-    {
-      //no bitcrusher
-      case 1:
-        withEffects = ((wavefolderFactor < 0.01) ? addedOscillators : wavefolder.Process(addedOscillators));
-        break;
-      //wavefolder then bitcrusher
-      case 3:
-      case 2:
-        if (bitcrushFactor > 0.02)
-          withEffects = bitcrusher.Process(((wavefolderFactor < 0.01) ? addedOscillators : wavefolder.Process(addedOscillators)));
-        else
-          withEffects = ((wavefolderFactor < 0.01) ? addedOscillators : wavefolder.Process(addedOscillators));
-        break;
-      
-    }
+    if (bitcrushFactor > 0.02)
+      withEffects = bitcrusher.Process(((wavefolderFactor < 0.01) ? addedOscillators : wavefolder.Process(addedOscillators)));
+    else
+      withEffects = ((wavefolderFactor < 0.01) ? addedOscillators : wavefolder.Process(addedOscillators));
 
 
-    switch (filterType)
-    {
+    switch (filterType) {
       case 0:
         withFilter = withEffects;
         break;
@@ -248,15 +250,11 @@ void ProcessAudio(float **in, float **out, size_t size) {
     }
 
 
-    if (vcaMode == 0)
-    {
+    if (vcaMode == 0) {
       adsrGain = 1.0;
       afterAdsr = withFilter;
-    }
-    else
-    {
-      switch (gateType)
-      {
+    } else {
+      switch (gateType) {
         //simple adsr
         case 1:
           adsrGain = adsr.Process(gate);
@@ -264,8 +262,8 @@ void ProcessAudio(float **in, float **out, size_t size) {
           break;
         //simple low pass gate
         case 3:
-          adsrGain = adsr.Process(gate);    
-          lowPassGate.SetFreq((sample_rate / 2) * (adsrGain * adsrGain));      
+          adsrGain = adsr.Process(gate);
+          lowPassGate.SetFreq((sample_rate / 2) * (adsrGain * adsrGain));
           afterAdsr = lowPassGate.Process(withFilter);
           break;
         //adsr + low pass gate
@@ -276,7 +274,6 @@ void ProcessAudio(float **in, float **out, size_t size) {
           afterAdsr = lpgOutput * ((adsrGain * 3 / 4) + 0.25);
           break;
       }
-
     }
 
 
@@ -284,14 +281,13 @@ void ProcessAudio(float **in, float **out, size_t size) {
 
     float finalOutput = afterAdsr * mainVolume;
 
-    out[0][i] = finalOutput;//Filter.High();
-    out[1][i] = finalOutput;//funkyFilter.High();
+    out[0][i] = finalOutput;  //Filter.High();
+    out[1][i] = finalOutput;  //funkyFilter.High();
   }
 }
 
 
-void setGlobalFrequency(float localFrequency)
-{
+void setGlobalFrequency(float localFrequency) {
   frequency = localFrequency;
   osc.SetFreq(frequency);
   oscOctaveOne.SetFreq(frequency / 2);
@@ -375,78 +371,64 @@ void loop() {
   Serial.print(" ,AN_MAIN_VOLUME ");
   Serial.println(mainVolume);
 #endif
-  if (mainFreq != mainFreqOLD)
-  {
+  if (mainFreq != mainFreqOLD) {
 
-    if (mainFreq < 10 && midiFreq != -1) //if frequency is at its lowest and midi fequency has been changed, don't update frequency*
+    if (mainFreq < 10 && midiFreq != -1)  //if frequency is at its lowest and midi fequency has been changed, don't update frequency*
     {
       //do nothing
-    }
-    else
-    {
+    } else {
       setGlobalFrequency(mainFreq);
     }
     mainFreqOLD = mainFreq;
   }
-  if (abs(octave1Factor - octave1FactorOLD) > TRIGGER_DIFF)
-  {
+  if (abs(octave1Factor - octave1FactorOLD) > TRIGGER_DIFF) {
     oscOctaveOne.SetAmp(octave1Factor * OSCILLATORS_FACTOR);
 
     octave1FactorOLD = octave1Factor;
   }
-  if (abs(octave2Factor - octave2FactorOLD) > TRIGGER_DIFF)
-  {
+  if (abs(octave2Factor - octave2FactorOLD) > TRIGGER_DIFF) {
     oscOctaveTwo.SetAmp(octave2Factor * OSCILLATORS_FACTOR);
 
     octave2FactorOLD = octave2Factor;
   }
-  if ((abs(wavefolderFactor - wavefolderFactorOLD) > TRIGGER_DIFF) || (effectFactorWaveFolderSetpoint != effectFactorWaveFolder))
-  {
+  if ((abs(wavefolderFactor - wavefolderFactorOLD) > TRIGGER_DIFF) || (effectFactorWaveFolderSetpoint != effectFactorWaveFolder)) {
     wavefolder.SetGain(5.0 * (wavefolderFactor * effectFactorWaveFolder) + 1.0);
     wavefolder.SetOffset(1.3 * (wavefolderFactor * effectFactorWaveFolder));
 
     wavefolderFactorOLD = wavefolderFactor;
   }
-  if ((abs(bitcrushFactor - bitcrushFactorOLD) > TRIGGER_DIFF) || (effectFactorBitCrusher != effectFactorBitCrusherSetpoint))
-  {
-    int convertedBitFactor = (bitcrushFactor) * 9.5 + 0;
+  if ((abs(bitcrushFactor - bitcrushFactorOLD) > TRIGGER_DIFF) || (effectFactorBitCrusher != effectFactorBitCrusherSetpoint)) {
+    int convertedBitFactor = (bitcrushFactor)*9.5 + 0;
     convertedBitFactor = convertedBitFactor;
 
-    bitcrusher.SetBitsToCrush(convertedBitFactor);//convertedBitFactor);
-    float downsampleFactor = (bitcrushFactor * effectFactorBitCrusher);//+ 0.5f;
+    bitcrusher.SetBitsToCrush(convertedBitFactor);                       //convertedBitFactor);
+    float downsampleFactor = (bitcrushFactor * effectFactorBitCrusher);  //+ 0.5f;
     bitcrusher.SetDownsampleFactor(downsampleFactor);
 
     //bitcrusher.SetDownsampleFactor((sample_rate) * (1.1 - bitcrushFactor));
     bitcrushFactorOLD = bitcrushFactor;
   }
-  if (abs(filterRes - filterResOLD) > TRIGGER_DIFF)
-  {
+  if (abs(filterRes - filterResOLD) > TRIGGER_DIFF) {
     float res = 0.3 + (filterRes * 0.69);
     funkyFilter.SetRes(res);
 
     filterResOLD = filterRes;
   }
-  if (abs(filterDrive - filterDriveOLD) > TRIGGER_DIFF)
-  {
+  if (abs(filterDrive - filterDriveOLD) > TRIGGER_DIFF) {
     float drive = filterDrive * 0.7;
     funkyFilter.SetDrive(drive);
 
     filterDriveOLD = filterDrive;
   }
 
-  if (filterFreq != filterFreqOLD)
-  {
-    if (filterMidiFreq == -1)
-    {
+  if (filterFreq != filterFreqOLD) {
+    if (filterMidiFreq == -1) {
       // if midi mod freq never changed
       float cutoffFreq = (filterFreq) * (sample_rate / 4);
       funkyFilter.SetFreq(cutoffFreq);
-    }
-    else
-    {
+    } else {
       // if midi mod freq never changed, need bigger change of filterFreq to update
-      if (abs(filterFreq - filterFreqOLD) > 0.008)
-      {
+      if (abs(filterFreq - filterFreqOLD) > 0.008) {
         filterMidiFreq = -1;
         float cutoffFreq = (filterFreq) * (sample_rate / 4);
         funkyFilter.SetFreq(cutoffFreq);
@@ -456,43 +438,36 @@ void loop() {
 
   filterFreqOLD = filterFreq;
 
-  if (abs(filterMidiFreq - filterMidiFreqOLD) > TRIGGER_DIFF)
-  {
+  if (abs(filterMidiFreq - filterMidiFreqOLD) > TRIGGER_DIFF) {
     float cutoffFreq = (filterMidiFreq) * (sample_rate / 4);
     funkyFilter.SetFreq(cutoffFreq);
 
     filterMidiFreqOLD = filterMidiFreq;
   }
 
-  if (abs(dyncAttack - dyncAttackOLD) > TRIGGER_DIFF)
-  {
+  if (abs(dyncAttack - dyncAttackOLD) > TRIGGER_DIFF) {
     adsr.SetAttackTime(dyncAttack);
 
     dyncAttackOLD = dyncAttack;
   }
-  if (abs(dyncDecay - dyncDecayOLD) > TRIGGER_DIFF)
-  {
+  if (abs(dyncDecay - dyncDecayOLD) > TRIGGER_DIFF) {
     adsr.SetDecayTime(dyncDecay);
 
     dyncDecayOLD = dyncDecay;
   }
-  if (abs(dyncRelease - dyncReleaseOLD) > TRIGGER_DIFF)
-  {
+  if (abs(dyncRelease - dyncReleaseOLD) > TRIGGER_DIFF) {
     adsr.SetReleaseTime(dyncRelease);
 
     dyncReleaseOLD = dyncRelease;
   }
-  if (mainVolume != mainVolumeOLD)
-  {
+  if (mainVolume != mainVolumeOLD) {
     mainVolumeOLD = mainVolume;
   }
 
-  if (oscType0 != oscType0OLD || oscType1 != oscType1OLD)
-  {
+  if (oscType0 != oscType0OLD || oscType1 != oscType1OLD) {
     int type = oscType0 + oscType1 * 2;
 
-    switch (type)
-    {
+    switch (type) {
       case 0:
         osc.SetWaveform(osc.WAVE_SIN);
         oscOctaveOne.SetWaveform(osc.WAVE_SIN);
@@ -513,134 +488,121 @@ void loop() {
         oscOctaveOne.SetWaveform(osc.WAVE_POLYBLEP_SQUARE);
         oscOctaveTwo.SetWaveform(osc.WAVE_POLYBLEP_SQUARE);
         break;
-
     }
 
     oscType0OLD = oscType0;
     oscType1OLD = oscType1;
   }
 
-  if (crushFold0 != crushFold0OLD || crushFold1 != crushFold1OLD)
-  {
+  if (crushFold0 != crushFold0OLD || crushFold1 != crushFold1OLD) {
     crushFoldType = crushFold0 + crushFold1 * 2;
     crushFold0OLD = crushFold0;
     crushFold1OLD = crushFold1;
 
-    switch (crushFoldType)
-    {
-      case 1://Fold only
+    switch (crushFoldType) {
+      case 1:  //Fold only
         effectFactorWaveFolderSetpoint = 1.0f;
+        effectFactorBitCrusherSetpoint = 0.0f;
         break;
-      case 3://F up D down
+      case 3:  //F up D down
         effectFactorWaveFolderSetpoint = 1.0f;
         effectFactorBitCrusherSetpoint = 0.5f;
         break;
-      case 2://F down D up
+      case 2:  //F down D up
         effectFactorWaveFolderSetpoint = 0.2f;
         effectFactorBitCrusherSetpoint = 1.0f;
         break;
     }
-
   }
-  if (filterType0 != filterType0OLD || filterType1 != filterType1OLD)
-  {
+  if (filterType0 != filterType0OLD || filterType1 != filterType1OLD) {
     filterType = filterType0 + filterType1 * 2;
 
     filterType0OLD = filterType0;
     filterType1OLD = filterType1;
   }
-  if (vcaMode != vcaModeOLD)
-  {
+  if (vcaMode != vcaModeOLD) {
 
     vcaModeOLD = vcaMode;
   }
-  if (gateType0 != gateType0OLD || gateType1 != gateType1OLD)
-  {
+  if (gateType0 != gateType0OLD || gateType1 != gateType1OLD) {
     gateType = gateType0 + gateType1 * 2;
 
     gateType0OLD = gateType0;
     gateType1OLD = gateType1;
   }
 
-  if (effectFactorWaveFolderSetpoint != effectFactorWaveFolder)
-  {
-    if (effectFactorWaveFolderSetpoint > effectFactorWaveFolder)
-    {
+  if (effectFactorWaveFolderSetpoint != effectFactorWaveFolder) {
+    if (effectFactorWaveFolderSetpoint > effectFactorWaveFolder) {
       effectFactorWaveFolder += 0.001;
-    }
-    else
-    {
+    } else {
       effectFactorWaveFolder -= 0.001;
     }
-    if(abs(effectFactorWaveFolderSetpoint - effectFactorWaveFolder)<0.001)
-    {
-        effectFactorWaveFolder = effectFactorWaveFolderSetpoint;
+    if (abs(effectFactorWaveFolderSetpoint - effectFactorWaveFolder) < 0.001) {
+      effectFactorWaveFolder = effectFactorWaveFolderSetpoint;
     }
   }
-  
-  if (effectFactorBitCrusher != effectFactorBitCrusherSetpoint)
-  {
-    if (effectFactorBitCrusherSetpoint > effectFactorBitCrusher)
-    {
+
+  if (effectFactorBitCrusher != effectFactorBitCrusherSetpoint) {
+    if (effectFactorBitCrusherSetpoint > effectFactorBitCrusher) {
       effectFactorBitCrusher += 0.001;
-    }
-    else
-    {
+    } else {
       effectFactorBitCrusher -= 0.001;
     }
-    if(abs(effectFactorBitCrusherSetpoint - effectFactorBitCrusher)<0.001)
-    {
-        effectFactorBitCrusher = effectFactorBitCrusherSetpoint;
+    if (abs(effectFactorBitCrusherSetpoint - effectFactorBitCrusher) < 0.001) {
+      effectFactorBitCrusher = effectFactorBitCrusherSetpoint;
     }
   }
 }
 
 void handleNoteOn(byte inChannel, byte inNote, byte inVelocity) {
-  Serial.println("handleNoteOn");
-  midiFreq = semitone_to_hertz(inNote - 57);
+  if (listeningMidiChannel == inChannel) {
+    if (inVelocity == 0) {
+      handleNoteOff(inChannel, inNote, inVelocity);
+    } else {
+      midiFreq = semitone_to_hertz(inNote - 57);
 
-  mainFreqUp = semitone_to_hertz(inNote - 57 + 1);
-  mainFreqDown = semitone_to_hertz(inNote - 57 - 1);
+      mainFreqUp = semitone_to_hertz(inNote - 57 + 1);
+      mainFreqDown = semitone_to_hertz(inNote - 57 - 1);
 
-  setGlobalFrequency(midiFreq);
-  gate = true;
-  digitalWrite(DI_O_PULSE, HIGH);
+      setGlobalFrequency(midiFreq);
+      gate = true;
+      digitalWrite(DI_O_PULSE, HIGH);
+    }
+  }
 }
 
-void handleNoteOff(byte inChannel, byte inNote, byte inVelocity)
-{
-  Serial.println("handleNoteOff");
-  gate = false;
-  digitalWrite(DI_O_PULSE, LOW);
+void handleNoteOff(byte inChannel, byte inNote, byte inVelocity) {
+
+  if (listeningMidiChannel == inChannel) {
+    Serial.println("handleNoteOff");
+    gate = false;
+    digitalWrite(DI_O_PULSE, LOW);
+  }
 }
 
-void handlePitchBend(unsigned char inChannel, int data)
-{
-  //data goest from -8192 to +8192
-  if (data == 0)
-  {
-    setGlobalFrequency(midiFreq);
-  }
-  else if (data > 0)
-  {
-    float bendedFreq = (((mainFreqUp - midiFreq) / 8192.0f) * data);
-    setGlobalFrequency(midiFreq + bendedFreq);
-  }
-  else if (data < 0)
-  {
-    float bendedFreq = (((midiFreq - mainFreqDown) / 8192.0f) * -data);
-    setGlobalFrequency(midiFreq - bendedFreq);
+void handlePitchBend(unsigned char inChannel, int data) {
 
+  if (listeningMidiChannel == inChannel) {
+    //data goest from -8192 to +8192
+    if (data == 0) {
+      setGlobalFrequency(midiFreq);
+    } else if (data > 0) {
+      float bendedFreq = (((mainFreqUp - midiFreq) / 8192.0f) * data);
+      setGlobalFrequency(midiFreq + bendedFreq);
+    } else if (data < 0) {
+      float bendedFreq = (((midiFreq - mainFreqDown) / 8192.0f) * -data);
+      setGlobalFrequency(midiFreq - bendedFreq);
+    }
   }
-
 }
 
-void handleControlChange(unsigned char inChannel, unsigned char data1, unsigned char data2)
-{
-  if (data1 == 1)
-  {
-    //data2 goes from 0 to 127
-    filterMidiFreq = data2 / 127.0f;
+void handleControlChange(unsigned char inChannel, unsigned char data1, unsigned char data2) {
+
+  if (listeningMidiChannel == inChannel) {
+    if (data1 == 1) {
+      //data2 goes from 0 to 127
+      filterMidiFreq = data2 / 127.0f;
+    }
   }
 }
 
