@@ -61,11 +61,15 @@ You can either activate the VCA/LPG with the VCA Mode switch and then select wha
 
 ## MIDI implementation
 
-The MIDI listen to all channel. It reacts to change note On, note Off, pitch bend, and control change. 
+The MIDI listen by default to **channel 1**. It reacts to change note On, note Off, pitch bend, and control change. 
 The control change affects the filter cutoff frequency.
 
 - Note On/Off will change the pitch. Be sure to have the oscillator main frequency potentiometer to its minimum to have no interference with MIDI.
 - Control change will change the cutoff frequency of the filter. Be sure to have the cutoff frequency potentiometer to its minimum to have no interference with MIDI.
+
+A button hooked on D13 can be used to change the MIDI channel. When pressed, the new MIDI channel will be saved accoarding to the oscillator type and filter type switches value in binnary  + 1.
+
+For example if you want to get MIDI channel 7, you will need to set the switch to 6 in binary 0b0110 which correspond to Triangle oscillator and low pass filter and then press the MIDI Channel selection button.
 
 
 ## Gpios
@@ -93,9 +97,14 @@ The control change affects the filter cutoff frequency.
 | General    | Gate   out signal       | Jack               |     5     |     6     |      66      |      6     |          |
 | VCA/LPG    | VCA   LPG selection     | Switch   3 pos 2.1 |     4     |     5     |      78      |      5     |          |
 | VCA/LPG    | VCA   LPG selection     | Switch   3 pos 2.2 |     3     |     4     |      79      |      4     |          |
+| MIDI       | MIDI Channel selection button| Button        |     13    |     2     |   (16)\*     |      14    |          |
 | MIDI       | MIDI   input            | MIDI   connector   |     1     |     2     |              |            | UART     |
 | Output     | AudioOut[0]             | Mono   Jack        | AudioOut1 |     18    |      76      |     18     |          |
 | Output     | AudioOut[1]             | Mono   Jack        | AudioOut2 |     19    |              |            | Not used |
+
+*The MIDI channel selection button can be put anywhere. In my case I put a discreet button on simple patch 16. I put it in this location so it is not really visible and can be accessed through the front panel window as so:
+
+![Midi channel selection button](pictures/MidiChannelSelectButton.jpeg)
 
 
 # Pictures
